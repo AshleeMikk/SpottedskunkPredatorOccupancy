@@ -1,0 +1,25 @@
+---
+title: "Spotted skunk predator  detection summary"
+author: "Ashlee Mikkelsen"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+
+setwd("~/Rprojects/SpottedskunkPredatorOccupancy")
+
+
+library(ggplot2)
+library(dplyr)
+
+Pred.site.summary <- read.csv("Predator_site_summary.csv")
+
+
+```
+
