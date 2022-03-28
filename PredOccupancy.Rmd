@@ -17,9 +17,22 @@ setwd("~/Rprojects/SpottedskunkPredatorOccupancy")
 
 library(ggplot2)
 library(dplyr)
+library(unmarked)
 
 Pred.site.summary <- read.csv("Predator_site_summary.csv")
 
+
+
+```
+
+```{r}
+NABBS <- read.csv("http://bcss.org.my/data/NABBS_NH017.csv",
+    row.names=1, comment="#")
+str(NABBS)
+
+Ymat <- as.matrix(NABBS)
+table(Ymat)
+colSums(Ymat)
 
 ```
 
