@@ -10,20 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-```{r}
-
-setwd("~/Rprojects/SpottedskunkPredatorOccupancy")
-
-
-library(ggplot2)
-library(dplyr)
-library(unmarked)
-
-Pred.site.summary <- read.csv("Predator_site_summary.csv")
-
-
-
-```
 
 ```{r}
 NABBS <- read.csv("http://bcss.org.my/data/NABBS_NH017.csv",
@@ -32,7 +18,123 @@ str(NABBS)
 
 Ymat <- as.matrix(NABBS)
 table(Ymat)
+
 colSums(Ymat)
 
+nOcc <- 11
+( nSobs <- ncol(Ymat) )
+( nSites <- nrow(Ymat) )
+
+z <- (Ymat > 0)*1
+z[z == 0] <- NA
+
+jagsData <- list(y = Ymat, nSobs = nSobs, nSites = nSites,
+    nOcc = nOcc, z = z)
+str(jagsData)
+
+wanted <- c("psi", "p")
+
+outS <- jags(jagsData, NULL, wanted, "MSOM_stacked.txt",
+    n.chains=3, n.adapt=100, n.burnin = 500, n.iter=12500,
+    n.thin=6, parallel=TRUE, DIC=FALSE)
+
+
+
+
+
+
 ```
+
+
+
+
+```{r}
+
+setwd("~/Rprojects/SpottedskunkPredatorOccupancy")
+
+
+library(ggplot2)
+library(dplyr)
+library(unmarked)
+library(jagsUI)
+
+Pred.site.summary <- read.csv("Predator_site_summary.csv", header = TRUE)
+
+
+
+```
+
+
+
+```{r}
+
+MultiSpecies <- read.csv("MultiSpeciesDetections_NoOccasions.csv", header = TRUE)
+str(MultiSpecies)
+
+Ymat <- as.matrix(MultiSpecies[2:5])
+table(Ymat)
+nOcc <- 4
+nSobs <- ncol(Ymat)
+nSites <- nrow(Ymat)
+
+```
+
+This code runs a stacked single species occupancy model. Its referred to as stacked because it loops thorugh each species and estimates occupancy for that species
+
+```{r}
+
+sink("MSOM_stacked.txt")
+cat("
+model{
+  for(k in 1:nSobs){  # Loop through species
+    # Likelihood
+    for(i in 1:nSites) {
+       # Ecological model
+       z[i, k] ~ dbern(psi[k])
+       # Observation model
+       y[i, k] ~ dbin(p[k] * z[i, k], nOcc)
+    }
+
+    # Priors
+    p[k] ~ dbeta(1, 1) # Uninformative prior
+    psi[k] ~ dbeta(1, 1)
+  }
+}
+
+",fill = TRUE)
+sink()
+
+```
+
+
+```{r}
+
+z <- as.matrix((Ymat>0)*1)
+z[z==0] <- NA
+inits <- function() list(z = rep(1, nSites))
+inits()
+
+JagsData <- list(y=Ymat, nSobs=nSobs,nSites=nSites,nOcc=nOcc,z=z)
+str(JagsData)
+
+wanted <- c("psi","p")
+
+```
+
+
+
+
+```{r}
+
+
+OutS <- jags(
+  JagsData,inits,wanted, "MSOM_stacked.txt",
+  n.chains = 4, n.adapt = 100, n.burnin = 5000, n.iter = 50000, n.thin = 20,
+  parallel = TRUE, DIC = FALSE
+)
+
+
+
+```
+
 
