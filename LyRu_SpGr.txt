@@ -1,0 +1,22 @@
+
+
+model{
+  # Likelihood
+  for(i in 1:nSites) {
+    # biological model
+    zA[i] ~ dbern(psiA)
+    zB[i] ~ dbern(psiB[zA[i] + 1])
+    # observation model
+    yA[i] ~ dbin(pA * zA[i], n)
+    yB[i] ~ dbin(pB * zB[i], n)
+  }
+
+  # Priors
+  pA ~ dbeta(1, 1) # Uninformative priors
+  pB ~ dbeta(1, 1)
+  psiA ~ dbeta(1, 1)
+  psiB[1] ~ dbeta(1, 1)
+  psiB[2] ~ dbeta(1, 1)
+}
+
+

@@ -9,132 +9,129 @@ output: word_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
-
-```{r}
-NABBS <- read.csv("http://bcss.org.my/data/NABBS_NH017.csv",
-    row.names=1, comment="#")
-str(NABBS)
-
-Ymat <- as.matrix(NABBS)
-table(Ymat)
-
-colSums(Ymat)
-
-nOcc <- 11
-( nSobs <- ncol(Ymat) )
-( nSites <- nrow(Ymat) )
-
-z <- (Ymat > 0)*1
-z[z == 0] <- NA
-
-jagsData <- list(y = Ymat, nSobs = nSobs, nSites = nSites,
-    nOcc = nOcc, z = z)
-str(jagsData)
-
-wanted <- c("psi", "p")
-
-outS <- jags(jagsData, NULL, wanted, "MSOM_stacked.txt",
-    n.chains=3, n.adapt=100, n.burnin = 500, n.iter=12500,
-    n.thin=6, parallel=TRUE, DIC=FALSE)
-
-
-
-
-
-
-```
-
-
-
-
+###### Data setup
 ```{r}
 
 setwd("~/Rprojects/SpottedskunkPredatorOccupancy")
-
 
 library(ggplot2)
 library(dplyr)
 library(unmarked)
 library(jagsUI)
-
-Pred.site.summary <- read.csv("Predator_site_summary.csv", header = TRUE)
-
+library(wiqid)
 
 
 ```
 
-
+Load in and format data into capture histories. Right now the file contains the number of detections (pictures) of each species during each trapping session (Ji). Each species is represented by a 4-letter code referencing the first two letters of their genus and species. For example, the first row is the number of photos of Bobcat (*Lynx rufus*) in trapping session 1: LyRu.J1
 
 ```{r}
 
-MultiSpecies <- read.csv("MultiSpeciesDetections_NoOccasions.csv", header = TRUE)
+MultiSpecies <- read.csv("MultiSpeciesCapHist_RAW.csv", header = TRUE)
 str(MultiSpecies)
+CapHists <- MultiSpecies[,2:17]
+str(CapHists)
 
-Ymat <- as.matrix(MultiSpecies[2:5])
-table(Ymat)
-nOcc <- 4
-nSobs <- ncol(Ymat)
-nSites <- nrow(Ymat)
-
-```
-
-This code runs a stacked single species occupancy model. Its referred to as stacked because it loops thorugh each species and estimates occupancy for that species
-
-```{r}
-
-sink("MSOM_stacked.txt")
-cat("
-model{
-  for(k in 1:nSobs){  # Loop through species
-    # Likelihood
-    for(i in 1:nSites) {
-       # Ecological model
-       z[i, k] ~ dbern(psi[k])
-       # Observation model
-       y[i, k] ~ dbin(p[k] * z[i, k], nOcc)
+for (i in 1:16) {
+  for (e in 1:91) {
+    if(CapHists[e,i]>=1){
+      CapHists[e,i]=1
+    }else{
+      CapHists[e,i]=0
     }
-
-    # Priors
-    p[k] ~ dbeta(1, 1) # Uninformative prior
-    psi[k] ~ dbeta(1, 1)
   }
 }
 
-",fill = TRUE)
+
+```
+
+###### Spotted skunks and bobcats
+
+For my first attempt at modeling, I am going to use the co-occurance of spotted skunks and bobcats. In this scenario, spotted skunks are species B and bobcats are species A.
+
+```{r}
+
+DHA <- as.matrix(CapHists[,9:12])
+str(DHA)
+
+DHB <- as.matrix(CapHists[,1:4])
+str(DHB)
+
+```
+
+The model below contains an interaction where occupancy of species B is affected by the occupancy of species A, but species A is unaffected by Species A. Thus the code for Species A looks just like a basic occupancy model.
+
+```{r}
+sink("LyRu_SpGr.txt")
+cat("
+
+model{
+  # Likelihood
+  for(i in 1:nSites) {
+    # biological model
+    zA[i] ~ dbern(psiA)
+    zB[i] ~ dbern(psiB[zA[i] + 1])
+    # observation model
+    yA[i] ~ dbin(pA * zA[i], n)
+    yB[i] ~ dbin(pB * zB[i], n)
+  }
+
+  # Priors
+  pA ~ dbeta(1, 1) # Uninformative priors
+  pB ~ dbeta(1, 1)
+  psiA ~ dbeta(1, 1)
+  psiB[1] ~ dbeta(1, 1)
+  psiB[2] ~ dbeta(1, 1)
+}
+
+", fill=TRUE)
+
 sink()
 
+
 ```
 
+Below I aggregate and pack up the data into a format useable by JAGS
+
+```{r}
+# Aggregate detection data
+yA <- rowSums(DHA)
+yB <- rowSums(DHB)
+
+nSites <- nrow(MultiSpecies)
+zA <- ifelse(yA > 0, 1, NA)
+zB <- ifelse(yB > 0, 1, NA)
+nSurv <- ncol(DHA)
+jagsData <- list(yA = yA, yB = yB, n = nSurv, nSites = nSites,
+    zA = zA, zB = zB)
+str(jagsData)
+
+wanted <- c("pA", "pB", "psiA", "psiB")
+
+```
+
+Below I call Jags and run the model
 
 ```{r}
 
-z <- as.matrix((Ymat>0)*1)
-z[z==0] <- NA
-inits <- function() list(z = rep(1, nSites))
-inits()
-
-JagsData <- list(y=Ymat, nSobs=nSobs,nSites=nSites,nOcc=nOcc,z=z)
-str(JagsData)
-
-wanted <- c("psi","p")
+LyRu_SpGr.out <- jags(jagsData, NULL, wanted, model="LyRu_SpGr.txt",
+    n.chains=4, n.adapt=2000, n.iter=20000, n.burnin = 5000,DIC=FALSE,
+    parallel=TRUE)
 
 ```
 
 
-
-
+And below I look at output. The model seems to have converged and the diagnostic plots look good. The last 2 plots are the estimates of spotted skunk occupancy when bobcats are absent (PsiB[1]) and when bobcats are present (Psi B[2]). While there is some overlap, it looks like bobcats have a pretty clear effect on spotted skunk occupancy.
 ```{r}
 
+LyRu.SpGR_output <- mcmcOutput(LyRu_SpGr.out)
+summary(LyRu.SpGR_output)
 
-OutS <- jags(
-  JagsData,inits,wanted, "MSOM_stacked.txt",
-  n.chains = 4, n.adapt = 100, n.burnin = 5000, n.iter = 50000, n.thin = 20,
-  parallel = TRUE, DIC = FALSE
-)
-
-
+diagPlot(LyRu.SpGR_output, max=5)
+postPlot(LyRu.SpGR_output)
+postPlot(LyRu.SpGR_output, "psiB", xlim=c(0.25, 0.95))
 
 ```
+
 
 
