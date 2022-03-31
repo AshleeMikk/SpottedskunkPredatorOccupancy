@@ -1,0 +1,27 @@
+
+
+model{
+  # Likelihood
+  for(i in 1:nSites) {
+    # biological model
+    zA[i] ~ dbern(psiA)
+    zB[i] ~ dbern(psiB[zA[i] + 1])
+    # observation model
+    for(j in 1:n) {
+      DHA[i, j] ~ dbern(pA[zB[i] + 1] * zA[i])
+      DHB[i, j] ~ dbern(pB[zA[i] + DHA[i, j] + 1] * zB[i])
+    }
+  }
+
+  # Priors
+  pA[1] ~ dbeta(1, 1) # spsB absent
+  pA[2] ~ dbeta(1, 1) # spsB present
+  pB[1] ~ dbeta(1, 1) # spsA absent
+  pB[2] ~ dbeta(1, 1) # spsA present, not detected
+  pB[3] ~ dbeta(1, 1) # spsA present, detected
+  psiA ~ dbeta(1, 1)
+  psiB[1] ~ dbeta(1, 1)
+  psiB[2] ~ dbeta(1, 1)
+}
+
+

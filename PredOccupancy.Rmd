@@ -45,16 +45,18 @@ for (i in 1:16) {
 
 ```
 
+#### Simple co-occurance model
+
 ###### Spotted skunks and bobcats
 
 For my first attempt at modeling, I am going to use the co-occurance of spotted skunks and bobcats. In this scenario, spotted skunks are species B and bobcats are species A.
 
 ```{r}
 
-DHA <- as.matrix(CapHists[,9:12])
-str(DHA)
+DHA.LyRu <- as.matrix(CapHists[,1:4])
+str(DHA.LyRu)
 
-DHB <- as.matrix(CapHists[,1:4])
+DHB <- as.matrix(CapHists[,9:12])
 str(DHB)
 
 ```
@@ -62,7 +64,7 @@ str(DHB)
 The model below contains an interaction where occupancy of species B is affected by the occupancy of species A, but species A is unaffected by Species A. Thus the code for Species A looks just like a basic occupancy model.
 
 ```{r}
-sink("LyRu_SpGr.txt")
+sink("CoOccurance_simple.txt")
 cat("
 
 model{
@@ -95,14 +97,14 @@ Below I aggregate and pack up the data into a format useable by JAGS
 
 ```{r}
 # Aggregate detection data
-yA <- rowSums(DHA)
+yA <- rowSums(DHA.LyRu)
 yB <- rowSums(DHB)
 
 nSites <- nrow(MultiSpecies)
 zA <- ifelse(yA > 0, 1, NA)
 zB <- ifelse(yB > 0, 1, NA)
 nSurv <- ncol(DHA)
-jagsData <- list(yA = yA, yB = yB, n = nSurv, nSites = nSites,
+LyRu.SpGr_data <- list(yA = yA, yB = yB, n = nSurv, nSites = nSites,
     zA = zA, zB = zB)
 str(jagsData)
 
@@ -114,14 +116,16 @@ Below I call Jags and run the model
 
 ```{r}
 
-LyRu_SpGr.out <- jags(jagsData, NULL, wanted, model="LyRu_SpGr.txt",
-    n.chains=4, n.adapt=2000, n.iter=20000, n.burnin = 5000,DIC=FALSE,
+LyRu_SpGr.out <- jags(LyRu.SpGr_data , NULL, 
+    wanted, model="CoOccurance_simple.txt",
+    n.chains=4, n.adapt=2000, n.iter=200000, 
+    n.burnin = 10000,n.thin = 100,DIC=FALSE,
     parallel=TRUE)
 
 ```
 
 
-And below I look at output. The model seems to have converged and the diagnostic plots look good. The last 2 plots are the estimates of spotted skunk occupancy when bobcats are absent (PsiB[1]) and when bobcats are present (Psi B[2]). While there is some overlap, it looks like bobcats have a pretty clear effect on spotted skunk occupancy.
+And below I look at output. The model seems to have converged and the diagnostic plots look good. The last 2 plots are the estimates of spotted skunk occupancy when bobcats are absent (PsiB[1]) and when bobcats are present (Psi B[2]). We have pretty bad estimates for co-occurance. I expect this is related to small sample sized of stands in which bobcats and spoteed skunks were both detected
 ```{r}
 
 LyRu.SpGR_output <- mcmcOutput(LyRu_SpGr.out)
@@ -133,5 +137,357 @@ postPlot(LyRu.SpGR_output, "psiB", xlim=c(0.25, 0.95))
 
 ```
 
+
+
+###### Spotted skunks and coyotes
+
+Next, I am going to use the co-occurance of spotted skunks and coyotes.In this scenario, spotted skunks are species B and coyotes are species A.
+
+```{r}
+
+DHA.CaLa <- as.matrix(CapHists[,5:8])
+str(DHA.CaLa)
+
+DHB <- as.matrix(CapHists[,9:12])
+str(DHB)
+
+
+
+# Aggregate detection data
+yA <- rowSums(DHA.CaLa)
+yB <- rowSums(DHB)
+
+nSites <- nrow(MultiSpecies)
+zA <- ifelse(yA > 0, 1, NA)
+zB <- ifelse(yB > 0, 1, NA)
+nSurv <- ncol(DHA)
+CaLa.SpGr_data  <- list(yA = yA, yB = yB, n = nSurv, nSites = nSites,
+    zA = zA, zB = zB)
+str(jagsData)
+
+wanted <- c("pA", "pB", "psiA", "psiB")
+
+```
+
+
+The last 2 plots are the estimates of spotted skunk occupancy when coyotes are absent (PsiB[1]) and when coyotes are present (Psi B[2]).
+
+```{r}
+
+CaLa_SpGr.out <- jags(CaLa.SpGr_data, NULL, wanted,
+                      model="CoOccurance_simple.txt",
+                      n.chains=4, n.adapt=2000, n.iter=300000,
+                      n.burnin = 30000,n.thin = 100,DIC=FALSE,
+                      parallel=TRUE)
+
+CaLa.SpGR_output <- mcmcOutput(CaLa_SpGr.out)
+summary(CaLa.SpGR_output)
+
+diagPlot(CaLa.SpGR_output, max=5)
+postPlot(CaLa.SpGR_output)
+postPlot(CaLa.SpGR_output, "psiB", xlim=c(0.25, 0.95))
+
+
+```
+
+
+
+
+
+###### Spotted skunks and striped skunks
+
+Finally, I estimate the co-occurance of spotted skunks and striped skunks.In this scenario, spotted skunks are species B and striped skunks are species A.
+
+```{r}
+
+DHA.MeMe<- as.matrix(CapHists[,13:16])
+str(DHA.MeMe)
+
+DHB <- as.matrix(CapHists[,9:12])
+str(DHB)
+
+
+
+# Aggregate detection data
+yA <- rowSums(DHA.MeMe)
+yB <- rowSums(DHB)
+
+nSites <- nrow(MultiSpecies)
+zA <- ifelse(yA > 0, 1, NA)
+zB <- ifelse(yB > 0, 1, NA)
+nSurv <- ncol(DHA)
+MeMe.SpGr_data  <- list(yA = yA, yB = yB, n = nSurv, nSites = nSites,
+    zA = zA, zB = zB)
+str(MeMe.SpGr_data)
+
+wanted <- c("pA", "pB", "psiA", "psiB")
+
+```
+
+
+The last 2 plots are the estimates of spotted skunk occupancy when striped skunks are absent (PsiB[1]) and when striped skunks are present (Psi B[2]).
+
+```{r}
+
+MeMe_SpGr.out <- jags(MeMe.SpGr_data, NULL, wanted,
+                      model="CoOccurance_simple.txt",
+                      n.chains=4, n.adapt=2000, n.iter=300000,
+                      n.burnin = 30000,n.thin = 100,DIC=FALSE,
+                      parallel=TRUE)
+
+MeMe.SpGR_output <- mcmcOutput(MeMe_SpGr.out)
+summary(MeMe.SpGR_output)
+
+diagPlot(MeMe.SpGR_output, max=5)
+postPlot(MeMe.SpGR_output)
+postPlot(MeMe.SpGR_output, "psiB", xlim=c(0.025, 0.95))
+
+
+```
+
+#### Co-occurance model with an effect of species A on p(B)
+
+```{r}
+sink("CoOccurance_p.txt")
+cat("
+
+model{
+  # Likelihood
+  for(i in 1:nSites) {
+    # biological model
+    zA[i] ~ dbern(psiA)
+    zB[i] ~ dbern(psiB[zA[i] + 1])
+    # observation model
+    for(j in 1:n) {
+      DHA[i, j] ~ dbern(pA[zB[i] + 1] * zA[i])
+      DHB[i, j] ~ dbern(pB[zA[i] + DHA[i, j] + 1] * zB[i])
+    }
+  }
+
+  # Priors
+  pA[1] ~ dbeta(1, 1) # spsB absent
+  pA[2] ~ dbeta(1, 1) # spsB present
+  pB[1] ~ dbeta(1, 1) # spsA absent
+  pB[2] ~ dbeta(1, 1) # spsA present, not detected
+  pB[3] ~ dbeta(1, 1) # spsA present, detected
+  psiA ~ dbeta(1, 1)
+  psiB[1] ~ dbeta(1, 1)
+  psiB[2] ~ dbeta(1, 1)
+}
+
+", fill=TRUE)
+
+sink()
+
+
+```
+
+
+
+
+###### The effect of bobcats on occupancy and detection of spotted skunks
+
+```{r}
+# Aggregate detection data
+yA <- rowSums(DHA.LyRu)
+yB <- rowSums(DHB)
+
+nSites <- nrow(MultiSpecies)
+zA <- ifelse(yA > 0, 1, NA)
+zB <- ifelse(yB > 0, 1, NA)
+nSurv <- ncol(DHB)
+LyRu.SpGr.p_data <- list(DHA = DHA.LyRu, DHB = DHB, n = nSurv, nSites = nSites,
+    zA = zA, zB = zB)
+str(LyRu.SpGr.p_data)
+
+wanted <- c("pA", "pB", "psiA", "psiB")
+
+
+```
+
+
+```{r}
+LyRU_SpGr.p.out <- jags(LyRu.SpGr.p_data, NULL, wanted,
+                      model="CoOccurance_p.txt",
+                      n.chains=4, n.adapt=2000, n.iter=300000,
+                      n.burnin = 30000,n.thin = 100,DIC=FALSE,
+                      parallel=TRUE)
+
+LyRu.SpGR.p_output <- mcmcOutput(LyRU_SpGr.p.out)
+summary(LyRu.SpGR.p_outputt)
+
+diagPlot(LyRu.SpGR.p_output, max=5)
+postPlot(LyRu.SpGR.p_output)
+postPlot(LyRu.SpGR.p_output, "psiB", xlim=c(0.025, 0.95))
+```
+
+
+Below are the plots for the probability of detecting a bobcat (Species A) when spotted skunks are absent (1) and when spotted skunks are present (2)
+
+```{r}
+plot(LyRu.SpGR.p_output, "pA")
+```
+
+
+And these are the plots for the detection probability of spoteed skunks when bobcats are absent (1), bobcats are present (2), and when bobcats are both present and detected (3)
+```{r}
+plot(LyRu.SpGR.p_output, "pB")
+
+```
+
+Bobcats don't seem to have much of an effect on spotted skunks. Their detection probability actually increases when bobcats are present, likely indicating that both species use or select similar forests stands and therefore are likely to co-exist. They don't seem to be driving spotted skunks out of the area.
+
+```{r}
+
+plot(LyRu.SpGR.p_output,1, "psiB")
+
+
+```
+
+When we look at the occupancy probability of spotted skunks when bobcats are absent (1) and present (2), we see a similar story. occupancy probability increases when bobcats are present.
+
+```{r}
+
+
+LyRU.Occdiff <- apply(LyRu.SpGR.p_output$psiB, 1, diff)
+postPlot(LyRU.Occdiff, compVal=0)
+
+```
+
+
+
+###### The effect of coyotes on occupancy and detection of spotted skunks
+
+```{r}
+
+# Aggregate detection data
+yA <- rowSums(DHA.CaLa)
+str(DHA.CaLa)
+yB <- rowSums(DHB)
+
+nSites <- nrow(MultiSpecies)
+zA <- ifelse(yA > 0, 1, NA)
+zB <- ifelse(yB > 0, 1, NA)
+nSurv <- ncol(DHB)
+CaLa.SpGr.p_data <- list(DHA = DHA.CaLa, DHB = DHB, n = nSurv, nSites = nSites,
+    zA = zA, zB = zB)
+str(CaLa.SpGr.p_data)
+
+wanted <- c("pA", "pB", "psiA", "psiB")
+
+
+CaLa_SpGr.p.out <- jags(CaLa.SpGr.p_data, NULL, wanted,
+                      model="CoOccurance_p.txt",
+                      n.chains=4, n.adapt=2000, n.iter=300000,
+                      n.burnin = 30000,n.thin = 100,DIC=FALSE,
+                      parallel=TRUE)
+
+CaLa.SpGR.p_output <- mcmcOutput(CaLa_SpGr.p.out)
+summary(CaLa.SpGR.p_output)
+
+diagPlot(CaLa.SpGR.p_output, max=5)
+postPlot(CaLa.SpGR.p_output)
+postPlot(CaLa.SpGR.p_output, "psiB", xlim=c(0.025, 0.95))
+
+```
+
+
+Below are the plots for the probability of detecting a coyote (Species A) when spotted skunks are absent (1) and when spotted skunks are present (2)
+
+```{r}
+plot(CaLa.SpGR.p_output, "pA")
+```
+
+And these are the plots for the detection probability of spotted skunks when coyotes are absent (1), coyotes are present (2), and when coyotes are both present and detected (3)
+
+```{r}
+
+plot(CaLa.SpGR.p_output, "pB")
+
+```
+
+Again, we see a big increase in the probability of detection when coyotes are detected. It will be important to consider this in context of how many sites they co-occur in and the stand characteristics of the sights where they both co-occur and don't.
+
+```{r}
+plot(CaLa.SpGR.p_output, "psiB")
+
+```
+There does seem to be some difference in the probability of occupancy. When coyotes are absent (1) spotted skunk occupancy probability is almost twice of the occupancy probability when coyotes are present (2). The distribution of the occupancy without coyotes is much less certain that when coyotes are present, which may be related to sample sizes. It will be important to know how many sites in which spotted skunks were detected that coyotes were not detected in.
+
+```{r}
+
+CaLa.Occdiff <- apply(CaLa.SpGR.p_output$psiB, 1, diff)
+postPlot(CaLa.Occdiff, compVal=0)
+
+```
+
+
+
+###### The effect of striped skunks on occupancy and detection of spotted skunks
+
+```{r}
+# Aggregate detection data
+yA <- rowSums(DHA.MeMe)
+yB <- rowSums(DHB)
+
+nSites <- nrow(MultiSpecies)
+zA <- ifelse(yA > 0, 1, NA)
+zB <- ifelse(yB > 0, 1, NA)
+nSurv <- ncol(DHB)
+MeMe.SpGr.p_data <- list(DHA = DHA.MeMe, DHB = DHB, n = nSurv, nSites = nSites,
+    zA = zA, zB = zB)
+str(MeMe.SpGr.p_data)
+
+wanted <- c("pA", "pB", "psiA", "psiB")
+
+
+MeMe_SpGr.p.out <- jags(MeMe.SpGr.p_data, NULL, wanted,
+                      model="CoOccurance_p.txt",
+                      n.chains=4, n.adapt=2000, n.iter=300000,
+                      n.burnin = 30000,n.thin = 100,DIC=FALSE,
+                      parallel=TRUE)
+
+MeMe.SpGR.p_output <- mcmcOutput(MeMe_SpGr.p.out)
+summary(MeMe.SpGR.p_output)
+
+diagPlot(MeMe.SpGR.p_output, max=5)
+postPlot(MeMe.SpGR.p_output)
+postPlot(MeMe.SpGR.p_output, "psiB", xlim=c(0.025, 0.95))
+
+```
+
+Below are the plots for the probability of detecting a striped skunk (Species A) when spotted skunks are absent (1) and when spotted skunks are present (2)
+
+```{r}
+plot(MeMe.SpGR.p_output, "pA")
+```
+
+
+And these are the plots for the detection probability of spotted skunks when striped skunks are absent (1), present (2), and both present and detected (3)
+
+```{r}
+
+plot(MeMe.SpGR.p_output, "pB")
+
+```
+
+
+striped skunk occupancy doesn't seem to have any effect on spotted skunk detection
+
+```{r}
+plot(MeMe.SpGR.p_output, "psiB")
+
+
+```
+
+spotted skunk occupancy is slightly lower when striped skunks are present (2) than when they are absent (1), but the effects is quite small
+
+```{r}
+
+MeMe.Occdiff <- apply(MeMe.SpGR.p_output$psiB, 1, diff)
+postPlot(MeMe.Occdiff, compVal=0)
+
+
+```
 
 
