@@ -1,0 +1,24 @@
+
+
+model{
+  # Likelihood
+  for(i in 1:nSites) {
+     # Ecological model
+     zA[i] ~ dbern(psiA[i])
+     zB[i] ~ dbern(psiB[(Cage[i]+1)*zA[i] + 1])
+     # Observation model
+     yA[i] ~ dbin(pA * zA[i], n)
+     yB[i] ~ dbin(pB * zB[i], n)
+    }
+
+
+  # Priors
+  pA ~ dbeta(1, 1) # Uninformative priors
+  pB ~ dbeta(1, 1)
+
+  psiB[1] ~ dbeta(1, 1)  # when sps A absent
+  psiB[2] ~ dbeta(1, 1)  # when sps A present, young forests
+  psiB[3] ~ dbeta(1, 1)  # when sps A present, old forests
+}
+
+
