@@ -12,6 +12,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ###### Data setup
 ```{r}
 
+rm(list = ls())
+
 setwd("~/Rprojects/SpottedskunkPredatorOccupancy")
 
 library(ggplot2)
@@ -103,10 +105,10 @@ yB <- rowSums(DHB)
 nSites <- nrow(MultiSpecies)
 zA <- ifelse(yA > 0, 1, NA)
 zB <- ifelse(yB > 0, 1, NA)
-nSurv <- ncol(DHA)
+nSurv <- ncol(DHA.LyRu)
 LyRu.SpGr_data <- list(yA = yA, yB = yB, n = nSurv, nSites = nSites,
     zA = zA, zB = zB)
-str(jagsData)
+str(LyRu.SpGr_data)
 
 wanted <- c("pA", "pB", "psiA", "psiB")
 
@@ -490,4 +492,103 @@ postPlot(MeMe.Occdiff, compVal=0)
 
 ```
 
+
+#### Co-occurance model with landscape covariates
+
+Below I import the data from the Ouchita Ranger District on the surveyed stands and create two standardized covariates
+```{r}
+StandData <- read.csv("StandData_2019.csv")
+
+Zage <- standardize(StandData$STAND.AGE)
+Zsize.acres <- standardize(StandData$ACRES)
+Cage <- vector()
+
+for (i in 1:91) {
+  if(StandData$Class[i]=="Y"){
+    Cage[i]=0
+  }else{
+    Cage[i]=1
+  }
+  
+}
+
+
+```
+
+###### JAGS model
+Below we have the JAGS model with the effect of stand size on species A and stand age as a binomial Young/Old indicator
+```{r}
+
+sink("CoOccurance_Age.txt")
+cat("
+
+model{
+  # Likelihood
+  for(i in 1:nSites) {
+     # Ecological model
+     zA[i] ~ dbern(psiA[i])
+     zB[i] ~ dbern(psiB[(Cage[i]+1)*zA[i] + 1])
+     # Observation model
+     yA[i] ~ dbin(pA * zA[i], n)
+     yB[i] ~ dbin(pB * zB[i], n)
+    }
+
+
+  # Priors
+  pA ~ dbeta(1, 1) # Uninformative priors
+  pB ~ dbeta(1, 1)
+
+  psiB[1] ~ dbeta(1, 1)  # when sps A absent
+  psiB[2] ~ dbeta(1, 1)  # when sps A present, young forests
+  psiB[3] ~ dbeta(1, 1)  # when sps A present, old forests
+}
+
+", fill=TRUE)
+
+sink()
+
+
+```
+
+Below I package the data into a JAGS object
+```{r}
+yA <- rowSums(DHA.LyRu)
+yB <- rowSums(DHB)
+
+nSites <- nrow(MultiSpecies)
+zA <- ifelse(yA > 0, 1, NA)
+zB <- ifelse(yB > 0, 1, NA)
+nSurv <- ncol(DHA)
+LyRu.SpGr_data.Age <- list(yA = yA, yB = yB, n = nSurv, nSites = nSites,
+    zA = zA, zB = zB,Cage=Cage)
+str(LyRu.SpGr_data.Age)
+
+wanted <- c("pA", "pB","psiA", "psiB")
+
+
+```
+
+
+
+```{r}
+
+LyRu_SpGr.p.Age.out <- jags(LyRu.SpGr_data.Age, NULL, wanted,
+                      model="CoOccurance_Age.txt",
+                      n.chains=4, n.adapt=2000, n.iter=400000,
+                      n.burnin = 30000,n.thin = 100,DIC=FALSE,
+                      parallel=TRUE)
+
+LyRu.SpGR.p.cov_output <- mcmcOutput(LyRu_SpGr.p.cov.out)
+summary(LyRu.SpGR.p.cov_output)
+
+diagPlot(LyRu.SpGR.p.cov_output, max=5)
+postPlot(LyRu.SpGR.p.cov_output)
+postPlot(LyRu.SpGR.p.cov_output, "psiB", xlim=c(0.025, 0.95))
+
+plot(LyRu.SpGR.p.cov_output, "psiB", xlim=c(0.1, 1))
+plot(LyRu.SpGR.p.cov_output, "aSize")
+
+
+
+```
 
