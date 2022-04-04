@@ -1,0 +1,233 @@
+---
+title: "Incorporating Covariates"
+author: "Ashlee Mikkelsen"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+###### Data setup
+
+rm(list = ls())
+
+setwd("~/Rprojects/SpottedskunkPredatorOccupancy")
+
+library(ggplot2)
+library(dplyr)
+library(unmarked)
+library(jagsUI)
+library(wiqid)
+
+
+```
+
+
+
+
+Load in and format data into capture histories. Right now the file contains the number of detections (pictures) of each species during each trapping session (Ji). Each species is represented by a 4-letter code referencing the first two letters of their genus and species. For example, the first row is the number of photos of Bobcat (*Lynx rufus*) in trapping session 1: LyRu.J1
+
+```{r}
+
+
+MultiSpecies <- read.csv("MultiSpeciesCapHist_RAW.csv", header = TRUE)
+str(MultiSpecies)
+CapHists <- MultiSpecies[,2:17]
+str(CapHists)
+
+for (i in 1:16) {
+  for (e in 1:91) {
+    if(CapHists[e,i]>=1){
+      CapHists[e,i]=1
+    }else{
+      CapHists[e,i]=0
+    }
+  }
+}
+
+
+```
+
+### Introduction
+
+Pull out a capHist for each species. Following the standard notation for species co-occurance models, spotted skunks will always be species B and the cap history will be names DHB (detection history species B). Species A will vary and be denoted by a 4-letter code corresponding to the first two letters of the genus and species names. For example, capture histories of bobcats will be named DHA.LyRu (detection history for species A, bobcat: *Lynx rufus*).
+
+Below I store all of our detection histories as matrices.
+
+```{r}
+# Eastern plotted skunk/ plains skunk
+DHB <- as.matrix(CapHists[,9:12])
+str(DHB)
+
+# Bobcat Lynx rufus
+DHA.LyRu <- as.matrix(CapHists[,1:4])
+str(DHA.LyRu)
+
+# Coyote Canis latrans
+DHA.CaLa <- as.matrix(CapHists[,5:8])
+str(DHA.CaLa)
+
+# Stiped skunk Mephitis mephitis
+DHA.MeMe<- as.matrix(CapHists[,13:16])
+str(DHA.MeMe)
+
+nSites <- nrow(MultiSpecies)
+nSurv <- ncol(DHB)
+
+```
+
+#### Co-occurance model with landscape covariates
+
+##### Import and data and create covariates
+
+Below I import the data from the Ouchita Ranger District on the surveyed stands and create two standardized covariates
+
+```{r}
+StandData <- read.csv("StandData_2019.csv")
+
+Zage <- standardize(StandData$STAND.AGE)
+Zsize.acres <- standardize(StandData$ACRES)
+Cage <- vector()
+
+for (i in 1:91) {
+  if(StandData$Class[i]=="Y"){
+    Cage[i]=0
+  }else{
+    Cage[i]=1
+  }
+  
+}
+
+```
+
+### A simple model with the categorical effect of age and species co-occurance on spotted skunk occupancy porbability
+
+```{r}
+
+sink("CoOccurance_Age.txt")
+cat("
+
+model{
+  # Likelihood
+  for(i in 1:nSites) {
+     # Ecological model
+     zA[i] ~ dbern(psiA)
+     zB[i] ~ dbern(psiB[(Cage[i]+1)*zA[i] + 1])
+     # Observation model
+     yA[i] ~ dbin(pA * zA[i], n)
+     yB[i] ~ dbin(pB * zB[i], n)
+    }
+
+
+  # Priors
+  pA ~ dbeta(1, 1) # Uninformative priors
+  pB ~ dbeta(1, 1)
+  psiA ~ dbeta(1, 1)
+  psiB[1] ~ dbeta(1, 1)  # when sps A absent
+  psiB[2] ~ dbeta(1, 1)  # when sps A present, young forests
+  psiB[3] ~ dbeta(1, 1)  # when sps A present, old forests
+}
+
+", fill=TRUE)
+
+sink()
+
+
+```
+
+#### Bobcats and stand age
+
+Below I package the data into a JAGS object
+
+```{r}
+yA <- rowSums(DHA.LyRu)
+yB <- rowSums(DHB)
+
+zA <- ifelse(yA > 0, 1, NA)
+zB <- ifelse(yB > 0, 1, NA)
+LyRu.SpGr_data.Age <- list(yA = yA, yB = yB, 
+                           n = nSurv, nSites = nSites,
+                           zA = zA, zB = zB,Cage=Cage)
+str(LyRu.SpGr_data.Age)
+
+wanted <- c("pA", "pB","psiA", "psiB")
+
+
+```
+
+##### Output for model $\psi$ (LYRU.AGE) *p*(.)
+
+```{r}
+
+PsiLyRu.AGE_p.out <- jags(LyRu.SpGr_data.Age, NULL, wanted,
+                      model="CoOccurance_Age.txt",
+                      n.chains=4, n.adapt=2000, n.iter=600000,
+                      n.burnin = 30000,n.thin = 100,DIC=FALSE,
+                      parallel=TRUE)
+
+PsiLyRu.AGE_p_output <- mcmcOutput(PsiLyRu.AGE_p.out)
+summary(PsiLyRu.AGE_p_output)
+
+diagPlot(PsiLyRu.AGE_p_output, max=5)
+postPlot(PsiLyRu.AGE_p_output)
+postPlot(PsiLyRu.AGE_p_output, "psiB", xlim=c(0.025, 0.95))
+
+LyRU.Age_Occdiff <- apply(PsiLyRu.AGE_p_output$psiB, 1, diff)
+postPlot(LyRU.Age_Occdiff, compVal=0)
+
+```
+
+Similar to the results modeling just co-occurance, the probability of detecting a bobcat is fairly low, which is unsurprising given their secretive nature. I th ink the estimate for detecting skunks is a bit higher than I previously calculated. I need to doublecheck that...
+
+While detection was low for bobcats, occupancy was just over 0.55, which seems pretty good.
+
+When we look at the effect of bobcats and stand age on spotted skunks, again we see that when bobcat occupancy is low, so is the probability of spotted skunks occupancy. This indicates that these tw species are selecting for similar areas on the landscape. When bobcats are present, spotted skunk occupancy is much higher and there is a small difference between the probability of spotted skunk occupancy in young forests (psiB[2]) and old forests (psiB[3]).
+
+#### Coyotes and stand age
+
+Below I package the data into a JAGS object
+
+```{r}
+yA <- rowSums(DHA.CaLa)
+yB <- rowSums(DHB)
+
+zA <- ifelse(yA > 0, 1, NA)
+zB <- ifelse(yB > 0, 1, NA)
+CaLa.SpGr_data.Age <- list(yA = yA, yB = yB, 
+                           n = nSurv, nSites = nSites,
+                           zA = zA, zB = zB,Cage=Cage)
+str(CaLa.SpGr_data.Age)
+
+wanted <- c("pA", "pB","psiA", "psiB")
+
+
+```
+
+
+##### Output for model $\psi$ (CALA.AGE) *p*(.)
+
+```{r}
+
+PsiCALA.AGE_p.out <- jags(CaLa.SpGr_data.Age, NULL, wanted,
+                      model="CoOccurance_Age.txt",
+                      n.chains=4, n.adapt=2000, n.iter=600000,
+                      n.burnin = 30000,n.thin = 100,DIC=FALSE,
+                      parallel=TRUE)
+
+PsiCALA.AGE_p_output <- mcmcOutput(PsiCALA.AGE_p.out)
+summary(PsiCALA.AGE_p_output)
+
+diagPlot(PsiCALA.AGE_p_output, max=5)
+postPlot(PsiCALA.AGE_p_output)
+postPlot(PsiCALA.AGE_p_output, "psiB", xlim=c(0.025, 0.95))
+
+plot(PsiCALA.AGE_p_output, "psiB", xlim=c(0.1, 1))
+
+```
+
+
+#### Striped skunks and stand age
+
