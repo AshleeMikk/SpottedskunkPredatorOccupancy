@@ -228,6 +228,132 @@ plot(PsiCALA.AGE_p_output, "psiB", xlim=c(0.1, 1))
 
 ```
 
+The relationship between spotted skunks and coyotes is not as positive as the relationship between spotted skunks and bobcats. Like bobcats, when coyotes are not present spotted skunk occupancy is lower, but the difference isn't as pronounced as it is with bobcats. This is probably because coyotes are more of a generalist species and therefore they have less overlap in forest requirements. Unlike with bobcats, this model estimates that when coyotes are present, the probability of occupancy in young forests is lower than old forests. The difference is very small, but it's still there.
 
 #### Striped skunks and stand age
+
+Below I package the data into a JAGS object
+
+```{r}
+yA <- rowSums(DHA.MeMe)
+yB <- rowSums(DHB)
+
+zA <- ifelse(yA > 0, 1, NA)
+zB <- ifelse(yB > 0, 1, NA)
+MeMe.SpGr_data.Age <- list(yA = yA, yB = yB, 
+                           n = nSurv, nSites = nSites,
+                           zA = zA, zB = zB,Cage=Cage)
+str(MeMe.SpGr_data.Age)
+
+wanted <- c("pA", "pB","psiA", "psiB")
+
+```
+
+
+##### Output for model $\psi$ (CALA.AGE) *p*(.)
+
+```{r}
+
+PsiMEME.AGE_p.out <- jags(MeMe.SpGr_data.Age, NULL, wanted,
+                      model="CoOccurance_Age.txt",
+                      n.chains=4, n.adapt=2000, n.iter=600000,
+                      n.burnin = 30000,n.thin = 100,DIC=FALSE,
+                      parallel=TRUE)
+
+PsiMEME.AGE_p_output <- mcmcOutput(PsiMEME.AGE_p.out)
+summary(PsiCALA.AGE_p_output)
+
+diagPlot(PsiMEME.AGE_p_output, max=5)
+postPlot(PsiMEME.AGE_p_output)
+postPlot(PsiMEME.AGE_p_output, "psiB", xlim=c(0.025, 0.95))
+
+plot(PsiMEME.AGE_p_output, "psiB", xlim=c(0.1, 1))
+
+```
+
+Well, this is weird and fun! In general, the probability of occupancy for spotted skunks is higher here than it was for coyotes. And we actually see some variation in occupancy probability and the effect of stand age. When striped skunks are present in young stands, the probability of spotted skunk occupancy is low. When striped skunks are present in older stands, the probability of spotted skunk occupancy fairly high, but a bit uncertain. Why would this be? Why would striped skunks facilitate occupancy in these older stands? Do they offer a more abundant, alternative prey for owls that protects spotted skunks?
+
+
+### A simple model with the continuous effect of stand size and species co-occurance on spotted skunk occupancy porbability
+
+```{r}
+
+sink("CoOccurance_Size.txt")
+cat("
+
+model{
+  # Likelihood
+  for(i in 1:nSites) {
+     # Ecological model
+     logit(psiB) <- a0+aSIZE*SIZE[i]+zA[i]
+     zA[i] ~ dbern(psiA)
+     zB[i] ~ dbern(psiB)
+     # Observation model
+     yA[i] ~ dbin(pA * zA[i], n)
+     yB[i] ~ dbin(pB * zB[i], n)
+    }
+
+
+  # Priors
+  psiA ~dbeta(1,1)
+  a0 ~ dunif(-5,5)
+  aSIZE ~ dunif(-5,5)
+  pA ~ dbeta(1, 1) # Uninformative priors
+  pB ~ dbeta(1, 1)
+  psiB[1] ~ dbeta(1, 1)  # when sps A absent
+  psiB[2] ~ dbeta(1, 1)  # when sps A present
+  }
+
+", fill=TRUE)
+
+sink()
+
+
+```
+
+
+#### Bobcats and stand size
+
+Below I package the data into a JAGS object
+
+```{r}
+yA <- rowSums(DHA.LyRu)
+yB <- rowSums(DHB)
+
+zA <- ifelse(yA > 0, 1, NA)
+zB <- ifelse(yB > 0, 1, NA)
+LyRu.SpGr_data.SIZE <- list(yA = yA, yB = yB, 
+                           n = nSurv, nSites = nSites,
+                           zA = zA, zB = zB,SIZE=Zsize.acres)
+str(LyRu.SpGr_data.SIZE)
+
+wanted <- c("pA", "pB","psiA", "psiB","a0", "aSIZE")
+
+
+```
+
+##### Output for model $\psi$ (LYRU.SIZE) *p*(.)
+
+```{r}
+
+PsiLyRu.SIZE_p.out <- jags(LyRu.SpGr_data.SIZE, NULL, wanted,
+                      model="CoOccurance_Size.txt",
+                      n.chains=4, n.adapt=2000, n.iter=600000,
+                      n.burnin = 30000,n.thin = 100,DIC=FALSE,
+                      parallel=TRUE)
+
+PsiLyRu.AGE_p_output <- mcmcOutput(PsiLyRu.AGE_p.out)
+summary(PsiLyRu.AGE_p_output)
+
+diagPlot(PsiLyRu.AGE_p_output, max=5)
+postPlot(PsiLyRu.AGE_p_output)
+postPlot(PsiLyRu.AGE_p_output, "psiB", xlim=c(0.025, 0.95))
+
+LyRU.Age_Occdiff <- apply(PsiLyRu.AGE_p_output$psiB, 1, diff)
+postPlot(LyRU.Age_Occdiff, compVal=0)
+
+
+
+
+```
 

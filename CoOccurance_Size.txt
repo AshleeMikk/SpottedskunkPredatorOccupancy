@@ -1,0 +1,26 @@
+
+
+model{
+  # Likelihood
+  for(i in 1:nSites) {
+     # Ecological model
+     logit(psiB) <- a0+aSIZE*SIZE[i]+zA[i]
+     zA[i] ~ dbern(psiA)
+     zB[i] ~ dbern(psiB)
+     # Observation model
+     yA[i] ~ dbin(pA * zA[i], n)
+     yB[i] ~ dbin(pB * zB[i], n)
+    }
+
+
+  # Priors
+  psiA ~dbeta(1,1)
+  a0 ~ dunif(-5,5)
+  aSIZE ~ dunif(-5,5)
+  pA ~ dbeta(1, 1) # Uninformative priors
+  pB ~ dbeta(1, 1)
+  psiB[1] ~ dbeta(1, 1)  # when sps A absent
+  psiB[2] ~ dbeta(1, 1)  # when sps A present
+  }
+
+
