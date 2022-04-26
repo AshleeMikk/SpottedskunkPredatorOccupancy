@@ -21,6 +21,7 @@ library(dplyr)
 library(unmarked)
 library(jagsUI)
 library(wiqid)
+library(viridis)
 
 
 ```
@@ -31,10 +32,27 @@ Load in and format data into capture histories. Right now the file contains the 
 
 MultiSpecies <- read.csv("MultiSpeciesCapHist_RAW.csv", header = TRUE)
 str(MultiSpecies)
-CapHists <- MultiSpecies[,2:17]
+
+SummaryTable <- read.csv("CoOccuranceSummaryTable.csv")
+P <- palette(viridis(4))
+
+ggplot(data = SummaryTable, aes(Stand,Detections))+
+  geom_col(aes(fill=Species))+
+  scale_fill_viridis(discrete = TRUE)+
+  theme_classic()+
+  theme(axis.text.x = element_blank(),
+        axis.text = element_text(size = 16, face = "bold"),
+        axis.title = element_text(size = 18, face = "bold"))+
+  xlab("Forest Stands Surveyed for Spotted Skunks 2019 - 2020")
+  
+
+
+
+
+CapHists <- MultiSpecies[,2:21]
 str(CapHists)
 
-for (i in 1:16) {
+for (i in 1:20) {
   for (e in 1:91) {
     if(CapHists[e,i]>=1){
       CapHists[e,i]=1
@@ -246,6 +264,66 @@ postPlot(MeMe.SpGR_output, "psiB", xlim=c(0.025, 0.95))
 
 
 ```
+
+
+#### Spotted skunks and racoons
+
+Below I aggregate and pack up the data into a format useable by JAGS
+
+```{r}
+
+DHA.PrLo<- as.matrix(CapHists[,17:20])
+str(DHA.PrLo)
+
+DHB <- as.matrix(CapHists[,9:12])
+str(DHB)
+
+
+# Aggregate detection data
+yA <- rowSums(DHA.PrLo)
+yB <- rowSums(DHB)
+
+nSites <- nrow(MultiSpecies)
+zA <- ifelse(yA > 0, 1, NA)
+zB <- ifelse(yB > 0, 1, NA)
+nSurv <- ncol(DHA.PrLo)
+PrLo.SpGr_data <- list(yA = yA, yB = yB, n = nSurv, nSites = nSites,
+    zA = zA, zB = zB)
+str(PrLo.SpGr_data)
+
+wanted <- c("pA", "pB", "psiA", "psiB")
+
+```
+
+Below I call Jags and run the model
+
+```{r}
+
+PrLo_SpGr.out <- jags(PrLo.SpGr_data , NULL, 
+    wanted, model="CoOccurance_simple.txt",
+    n.chains=4, n.adapt=2000, n.iter=200000, 
+    n.burnin = 10000,n.thin = 100,DIC=FALSE,
+    parallel=TRUE)
+
+```
+
+
+And below I look at output. The model seems to have converged and the diagnostic plots look good. The last 2 plots are the estimates of spotted skunk occupancy when raccoons are absent (PsiB[1]) and when raccoons are present (Psi B[2]).The probability of occupancy when raccoons are absent is hard to estimate because striped skunks are so rare while raccoons are ubiquitous.
+```{r}
+
+PrLo.SpGR_output <- mcmcOutput(PrLo_SpGr.out)
+summary(PrLo.SpGR_output)
+
+diagPlot(PrLo.SpGR_output, max=5)
+postPlot(PrLo.SpGR_output)
+postPlot(PrLo.SpGR_output, "psiB", xlim=c(0.25, 0.95))
+
+```
+
+
+
+
+
 
 #### Co-occurance model with an effect of species A on p(B)
 
